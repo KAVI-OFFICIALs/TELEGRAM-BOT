@@ -7,7 +7,8 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const BOT_TOKEN = '7689202878:AAFmAuvelPlcnDm39acAJNfUcfsqJtSvN_U';
+const bot = new Telegraf(BOT_TOKEN);
 
 // Validate YouTube URL
 function isYoutubeUrl(url) {
