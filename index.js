@@ -1,98 +1,60 @@
-const { Telegraf } = require('telegraf');
-const ytdl = require('ytdl-core');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 
-ffmpeg.setFfmpegPath(ffmpegPath);
+// Telegram YouTube Downloader Bot using Node.js and telegraf.js
+const { Telegraf, Markup } = require('telegraf');
+const { exec } = require('child_process');
+const fs = require('fs');
+const axios = require('axios');
+
 const BOT_TOKEN = '7689202878:AAFmAuvelPlcnDm39acAJNfUcfsqJtSvN_U';
 const bot = new Telegraf(BOT_TOKEN);
 
-// Validate YouTube URL
-function isYoutubeUrl(url) {
-  return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/.test(url);
-}
+bot.start((ctx) => ctx.reply('I am a YouTube Video and Audio downloader bot. S>
 
-// Message handler
-bot.on('message', async (ctx) => {
-  const msg = ctx.message;
-  if (!msg.text || !isYoutubeUrl(msg.text)) return;
+bot.on('text', async (ctx) => {
+    const url = ctx.message.text;
 
-  try {
-    const info = await ytdl.getInfo(msg.text);
-    const thumbnail = info.videoDetails.thumbnails[0].url;
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        try {
+            const videoInfo = await axios.get(`https://noembed.com/embed?url=$>
+            const title = videoInfo.data.title;
+            const thumbnail = videoInfo.data.thumbnail_url;
 
-    await ctx.replyWithPhoto(thumbnail, {
-      caption: `Download "${info.videoDetails.title}"`,
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '🎵 Audio', callback_data: `audio:${info.videoDetails.videoId}` },
-            { text: '🎥 Video', callback_data: `video:${info.videoDetails.videoId}` }
-          ]
-        ]
-      }
-    });
-  } catch (error) {
-    ctx.reply('❌ Error: Invalid YouTube URL');
-  }
-});
-
-// Callback handler
-bot.action(/^(audio|video):(.+)$/, async (ctx) => {
-  const [type, videoId] = ctx.match.slice(1);
-  const url = `https://youtu.be/${videoId}`;
-
-  try {
-    await ctx.deleteMessage(); // Delete button message
-    const processingMsg = await ctx.reply('⏳ Processing...');
-
-    const info = await ytdl.getInfo(url);
-    const title = info.videoDetails.title.replace(/[^\w\s]/gi, '');
-    const tempDir = path.join(__dirname, 'temp');
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-
-    const uniqueId = uuidv4();
-    let filePath;
-
-    if (type === 'audio') {
-      filePath = path.join(tempDir, `${title}_${uniqueId}.mp3`);
-      const audioStream = ytdl(url, { quality: 'highestaudio' });
-      
-      await new Promise((resolve, reject) => {
-        ffmpeg(audioStream)
-          .audioBitrate(128)
-          .toFormat('mp3')
-          .on('error', reject)
-          .on('end', resolve)
-          .save(filePath);
-      });
+            await ctx.replyWithPhoto(thumbnail, {
+                caption: `*${title}* - Select a download option below.`,
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([
+                    [Markup.button.callback('🎥 Video', `video_${url}`)],
+                    [Markup.button.callback('🎧 Audio', `audio_${url}`)]
+                ])
+            });
+        } catch (err) {
+            ctx.reply('Please check the YouTube link and try again.');
+        }
     } else {
-      filePath = path.join(tempDir, `${title}_${uniqueId}.mp4`);
-      const videoStream = ytdl(url, { quality: 'highest' });
-      
-      await new Promise((resolve, reject) => {
-        videoStream.pipe(fs.createWriteStream(filePath))
-          .on('finish', resolve)
-          .on('error', reject);
-      });
+        ctx.reply('Please provide a valid YouTube link.');
     }
-
-    await ctx.replyWithDocument({ source: filePath });
-    await ctx.deleteMessage(processingMsg.message_id);
-    fs.unlinkSync(filePath); // Cleanup
-  } catch (error) {
-    console.error(error);
-    ctx.reply('❌ Download failed!');
-  }
 });
 
-// Start bot
-bot.launch();
-console.log('Bot started!');
+bot.action(/(video|audio)_(.+)/, async (ctx) => {
+    const [type, url] = ctx.match.slice(1);
+    ctx.deleteMessage(); // Delete the button message
+    const format = type === 'video' ? 'mp4' : 'mp3';
+    const fileName = `download.${format}`;
 
-// Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+    ctx.reply('Downloading... Please wait.');
+
+    exec(`python3 -m yt_dlp -f bestaudio[ext=${format}]/best[ext=${format}] ${>
+        if (err) return ctx.reply('Failed to download the file!');
+
+        await ctx.replyWithDocument({ source: fileName });
+        fs.unlinkSync(fileName); // Delete the file after sending
+    });
+});
+
+bot.launch();
+console.log('✅ Bot is running...');
+
+
+
+
+
